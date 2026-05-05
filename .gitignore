@@ -1,6 +1,7 @@
 result
 result-*
 models/
+data/
 .direnv/
 __pycache__/
 *.pyc

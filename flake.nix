@@ -1,3 +1,5 @@
+# https://zenodo.org/records/10659112
+
 {
   description = "pygplates dev environment";
 
@@ -89,6 +91,8 @@
           plate-model-manager
           antimeridian
           ps.numpy
+          ps.netcdf4
+          ps.matplotlib
         ]);
       in
       {
@@ -100,7 +104,7 @@
 
           shellHook = ''
             export GPLATES_PYTHON="$(command -v python)"
-            export GPLATES_MODEL_DIR="$PWD/models/muller2022"
+            export GPLATES_MODEL_DIR="$PWD/models/paleomap"
             export PORT=8080
           '';
         };

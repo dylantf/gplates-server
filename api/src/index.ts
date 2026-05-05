@@ -1,13 +1,16 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { spawn } from "node:child_process";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const PROJECT_ROOT = resolve(import.meta.dir, "..", "..");
 const PYTHON = process.env.GPLATES_PYTHON ?? "python";
 const RECONSTRUCT_SCRIPT = resolve(PROJECT_ROOT, "scripts/reconstruct.py");
 const GLOBE_SCRIPT = resolve(PROJECT_ROOT, "scripts/globe.py");
+const TOPO_SCRIPT = resolve(PROJECT_ROOT, "scripts/render_topo.py");
 const MODEL_DIR = process.env.GPLATES_MODEL_DIR ?? resolve(PROJECT_ROOT, "models/muller2022");
+const TOPO_CACHE_DIR = resolve(PROJECT_ROOT, "data/cache/topo");
 
 type ReconstructResult = {
   present: [number, number];
@@ -42,6 +45,38 @@ const runReconstruct = (lat: number, lon: number, age: number) =>
 const runGlobe = (age: number) =>
   runPython<{ type: "FeatureCollection"; features: unknown[] }>(GLOBE_SCRIPT, [String(age)]);
 
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function snapAge(age: number): number {
+  // PaleoDEM files come at 5-Myr steps.
+  return Math.round(age / 5) * 5;
+}
+
+async function renderTopo(age: number): Promise<{ path: string; snapped: number }> {
+  const snapped = snapAge(age);
+  await mkdir(TOPO_CACHE_DIR, { recursive: true });
+  const out = resolve(TOPO_CACHE_DIR, `${String(snapped).padStart(3, "0")}.png`);
+  if (await fileExists(out)) return { path: out, snapped };
+
+  await new Promise<void>((resolveP, rejectP) => {
+    const child = spawn(PYTHON, [TOPO_SCRIPT, String(snapped), out], { cwd: PROJECT_ROOT });
+    let stderr = "";
+    child.stderr.on("data", (b) => (stderr += b));
+    child.on("error", rejectP);
+    child.on("close", (code) =>
+      code === 0 ? resolveP() : rejectP(new Error(stderr || `python exited ${code}`)),
+    );
+  });
+  return { path: out, snapped };
+}
+
 const app = new Hono();
 
 app.use("*", cors());
@@ -49,9 +84,30 @@ app.use("*", cors());
 app.get("/", (c) =>
   c.json({
     ok: true,
-    endpoints: ["/reconstruct?lat=&lng=&age=", "/globe/vector?age="],
+    endpoints: [
+      "/reconstruct?lat=&lng=&age=",
+      "/globe/vector?age=",
+      "/globe/topo?age=",
+    ],
   }),
 );
+
+app.get("/globe/topo", async (c) => {
+  const age = Number(c.req.query("age"));
+  if (!Number.isFinite(age) || age < 0 || age > 750) {
+    return c.json({ error: "age must be a number in [0, 750] (Ma)" }, 400);
+  }
+  try {
+    const { path, snapped } = await renderTopo(age);
+    const png = await readFile(path);
+    c.header("Content-Type", "image/png");
+    c.header("Cache-Control", "public, max-age=86400");
+    c.header("X-Snapped-Age", String(snapped));
+    return c.body(png);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
 
 app.get("/globe/vector", async (c) => {
   const age = Number(c.req.query("age"));
