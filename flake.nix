@@ -97,6 +97,12 @@
             pythonEnv
             pkgs.bun
           ];
+
+          shellHook = ''
+            export GPLATES_PYTHON="$(command -v python)"
+            export GPLATES_MODEL_DIR="$PWD/models/muller2022"
+            export PORT=8080
+          '';
         };
 
         packages.default = pythonEnv;

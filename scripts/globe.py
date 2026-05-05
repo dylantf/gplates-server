@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# pyright: reportAttributeAccessIssue=false
 """Build a GeoJSON FeatureCollection of the globe at a given age.
 
 Bundles three layers:

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# pyright: reportAttributeAccessIssue=false
 """Reconstruct a present-day (lat, lon) to its paleo position at a given age.
 
 Usage: reconstruct.py <lat> <lon> <age_ma> [model_dir]
