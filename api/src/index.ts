@@ -93,7 +93,6 @@ app.get("/", (c) =>
   c.json({
     ok: true,
     endpoints: [
-      "GET  /reconstruct?lat=&lng=&age=",
       "POST /reconstruct  (body: {age, points: [[lat,lng],...]})",
       "GET  /globe/topo?age=",
     ],
@@ -128,29 +127,6 @@ function validatePoint(p: unknown, i: number): string | null {
     return `points[${i}].lng must be a number in [-180, 180]`;
   return null;
 }
-
-app.get("/reconstruct", async (c) => {
-  const lat = Number(c.req.query("lat"));
-  const lng = Number(c.req.query("lng"));
-  const age = Number(c.req.query("age"));
-
-  if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
-    return c.json({ error: "lat must be a number in [-90, 90]" }, 400);
-  }
-  if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
-    return c.json({ error: "lng must be a number in [-180, 180]" }, 400);
-  }
-  if (!Number.isFinite(age) || age < 0) {
-    return c.json({ error: "age must be a non-negative number (Ma)" }, 400);
-  }
-
-  try {
-    const batch = await runReconstructBatch(age, [[lat, lng]]);
-    return c.json({ age: batch.age, ...batch.results[0] });
-  } catch (e) {
-    return c.json({ error: (e as Error).message }, 500);
-  }
-});
 
 app.post("/reconstruct", async (c) => {
   let body: unknown;
