@@ -12,14 +12,18 @@ const TOPO_SCRIPT = resolve(PROJECT_ROOT, "scripts/render_topo.py");
 const MODEL_DIR = process.env.GPLATES_MODEL_DIR ?? resolve(PROJECT_ROOT, "models/muller2022");
 const TOPO_CACHE_DIR = resolve(PROJECT_ROOT, "data/cache/topo");
 
-type ReconstructResult = {
+type ReconstructPoint = {
   present: [number, number];
-  age: number;
-  paleo: [number, number];
-  plate_id: number;
+  paleo: [number, number] | null;
+  plate_id: number | null;
 };
 
-function runPython<T>(script: string, args: string[]): Promise<T> {
+type ReconstructBatchResult = {
+  age: number;
+  results: ReconstructPoint[];
+};
+
+function runPython<T>(script: string, args: string[], stdinInput?: string): Promise<T> {
   return new Promise((resolveP, rejectP) => {
     const child = spawn(PYTHON, [script, ...args, MODEL_DIR], { cwd: PROJECT_ROOT });
     const out: Buffer[] = [];
@@ -36,11 +40,19 @@ function runPython<T>(script: string, args: string[]): Promise<T> {
         rejectP(new Error(`bad json from python (${text.length} bytes)`));
       }
     });
+    if (stdinInput !== undefined) {
+      child.stdin.write(stdinInput);
+    }
+    child.stdin.end();
   });
 }
 
-const runReconstruct = (lat: number, lon: number, age: number) =>
-  runPython<ReconstructResult>(RECONSTRUCT_SCRIPT, [String(lat), String(lon), String(age)]);
+const runReconstructBatch = (age: number, points: [number, number][]) =>
+  runPython<ReconstructBatchResult>(
+    RECONSTRUCT_SCRIPT,
+    [],
+    JSON.stringify({ age, points }),
+  );
 
 const runGlobe = (age: number) =>
   runPython<{ type: "FeatureCollection"; features: unknown[] }>(GLOBE_SCRIPT, [String(age)]);
@@ -85,9 +97,10 @@ app.get("/", (c) =>
   c.json({
     ok: true,
     endpoints: [
-      "/reconstruct?lat=&lng=&age=",
-      "/globe/vector?age=",
-      "/globe/topo?age=",
+      "GET  /reconstruct?lat=&lng=&age=",
+      "POST /reconstruct  (body: {age, points: [[lat,lng],...]})",
+      "GET  /globe/vector?age=",
+      "GET  /globe/topo?age=",
     ],
   }),
 );
@@ -124,6 +137,18 @@ app.get("/globe/vector", async (c) => {
   }
 });
 
+const MAX_BATCH = 10000;
+
+function validatePoint(p: unknown, i: number): string | null {
+  if (!Array.isArray(p) || p.length !== 2) return `points[${i}] must be [lat, lng]`;
+  const [lat, lng] = p as [unknown, unknown];
+  if (typeof lat !== "number" || !Number.isFinite(lat) || lat < -90 || lat > 90)
+    return `points[${i}].lat must be a number in [-90, 90]`;
+  if (typeof lng !== "number" || !Number.isFinite(lng) || lng < -180 || lng > 180)
+    return `points[${i}].lng must be a number in [-180, 180]`;
+  return null;
+}
+
 app.get("/reconstruct", async (c) => {
   const lat = Number(c.req.query("lat"));
   const lng = Number(c.req.query("lng"));
@@ -140,7 +165,39 @@ app.get("/reconstruct", async (c) => {
   }
 
   try {
-    const result = await runReconstruct(lat, lng, age);
+    const batch = await runReconstructBatch(age, [[lat, lng]]);
+    return c.json({ age: batch.age, ...batch.results[0] });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+app.post("/reconstruct", async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "body must be JSON" }, 400);
+  }
+  if (!body || typeof body !== "object") return c.json({ error: "body must be an object" }, 400);
+  const { age, points } = body as { age?: unknown; points?: unknown };
+
+  if (typeof age !== "number" || !Number.isFinite(age) || age < 0) {
+    return c.json({ error: "age must be a non-negative number (Ma)" }, 400);
+  }
+  if (!Array.isArray(points) || points.length === 0) {
+    return c.json({ error: "points must be a non-empty array of [lat, lng]" }, 400);
+  }
+  if (points.length > MAX_BATCH) {
+    return c.json({ error: `batch size ${points.length} exceeds max ${MAX_BATCH}` }, 400);
+  }
+  for (let i = 0; i < points.length; i++) {
+    const err = validatePoint(points[i], i);
+    if (err) return c.json({ error: err }, 400);
+  }
+
+  try {
+    const result = await runReconstructBatch(age, points as [number, number][]);
     return c.json(result);
   } catch (e) {
     return c.json({ error: (e as Error).message }, 500);
