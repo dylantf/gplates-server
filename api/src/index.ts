@@ -7,7 +7,6 @@ import { resolve } from "node:path";
 const PROJECT_ROOT = resolve(import.meta.dir, "..", "..");
 const PYTHON = process.env.GPLATES_PYTHON ?? "python";
 const RECONSTRUCT_SCRIPT = resolve(PROJECT_ROOT, "scripts/reconstruct.py");
-const GLOBE_SCRIPT = resolve(PROJECT_ROOT, "scripts/globe.py");
 const TOPO_SCRIPT = resolve(PROJECT_ROOT, "scripts/render_topo.py");
 const MODEL_DIR = process.env.GPLATES_MODEL_DIR ?? resolve(PROJECT_ROOT, "models/muller2022");
 const TOPO_CACHE_DIR = resolve(PROJECT_ROOT, "data/cache/topo");
@@ -54,9 +53,6 @@ const runReconstructBatch = (age: number, points: [number, number][]) =>
     JSON.stringify({ age, points }),
   );
 
-const runGlobe = (age: number) =>
-  runPython<{ type: "FeatureCollection"; features: unknown[] }>(GLOBE_SCRIPT, [String(age)]);
-
 async function fileExists(path: string): Promise<boolean> {
   try {
     await stat(path);
@@ -99,7 +95,6 @@ app.get("/", (c) =>
     endpoints: [
       "GET  /reconstruct?lat=&lng=&age=",
       "POST /reconstruct  (body: {age, points: [[lat,lng],...]})",
-      "GET  /globe/vector?age=",
       "GET  /globe/topo?age=",
     ],
   }),
@@ -117,21 +112,6 @@ app.get("/globe/topo", async (c) => {
     c.header("Cache-Control", "public, max-age=86400");
     c.header("X-Snapped-Age", String(snapped));
     return c.body(png);
-  } catch (e) {
-    return c.json({ error: (e as Error).message }, 500);
-  }
-});
-
-app.get("/globe/vector", async (c) => {
-  const age = Number(c.req.query("age"));
-  if (!Number.isFinite(age) || age < 0) {
-    return c.json({ error: "age must be a non-negative number (Ma)" }, 400);
-  }
-
-  try {
-    const fc = await runGlobe(age);
-    c.header("Cache-Control", "public, max-age=86400");
-    return c.json(fc);
   } catch (e) {
     return c.json({ error: (e as Error).message }, 500);
   }

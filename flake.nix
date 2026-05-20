@@ -68,28 +68,9 @@
           pythonImportsCheck = [ "plate_model_manager" ];
         };
 
-        antimeridian = python.pkgs.buildPythonPackage rec {
-          pname = "antimeridian";
-          version = "0.4.7";
-          format = "wheel";
-
-          src = pkgs.fetchurl {
-            url = "https://files.pythonhosted.org/packages/50/cc/f1f8a798820dfa339f8321e3b92f5cda38b0e4b2a0bd38f9d7a64bca26ca/antimeridian-${version}-py3-none-any.whl";
-            hash = "sha256-/twE1UYO6fBeN+etwzWENTj72RHCv3vTbFOTzU/+EH0=";
-          };
-
-          propagatedBuildInputs = with python.pkgs; [
-            numpy
-            shapely
-          ];
-
-          pythonImportsCheck = [ "antimeridian" ];
-        };
-
         pythonEnv = python.withPackages (ps: [
           pygplates
           plate-model-manager
-          antimeridian
           ps.numpy
           ps.netcdf4
           ps.matplotlib
