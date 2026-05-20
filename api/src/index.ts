@@ -8,7 +8,7 @@ const PROJECT_ROOT = resolve(import.meta.dir, "..", "..");
 const PYTHON = process.env.GPLATES_PYTHON ?? "python";
 const RECONSTRUCT_SCRIPT = resolve(PROJECT_ROOT, "scripts/reconstruct.py");
 const TOPO_SCRIPT = resolve(PROJECT_ROOT, "scripts/render_topo.py");
-const MODEL_DIR = process.env.GPLATES_MODEL_DIR ?? resolve(PROJECT_ROOT, "models/muller2022");
+const MODEL_DIR = process.env.GPLATES_MODEL_DIR ?? resolve(PROJECT_ROOT, "models/paleomap");
 const TOPO_CACHE_DIR = resolve(PROJECT_ROOT, "data/cache/topo");
 
 type ReconstructPoint = {

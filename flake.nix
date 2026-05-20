@@ -49,28 +49,8 @@
           pythonImportsCheck = [ "pygplates" ];
         };
 
-        plate-model-manager = python.pkgs.buildPythonPackage rec {
-          pname = "plate-model-manager";
-          version = "1.3.1";
-          format = "wheel";
-
-          src = pkgs.fetchurl {
-            url = "https://files.pythonhosted.org/packages/36/4d/2cd5fba9789197c3c9c3bfd3691389913712f261e70910c7e5104d9420f8/plate_model_manager-${version}-py3-none-any.whl";
-            hash = "sha256-wRWDISTz6GdV+9kFwaL1UjZ6CuiKcqha0Z8FCA9Dg94=";
-          };
-
-          propagatedBuildInputs = with python.pkgs; [
-            aiohttp
-            requests
-            nest-asyncio
-          ];
-
-          pythonImportsCheck = [ "plate_model_manager" ];
-        };
-
         pythonEnv = python.withPackages (ps: [
           pygplates
-          plate-model-manager
           ps.numpy
           ps.netcdf4
           ps.matplotlib
